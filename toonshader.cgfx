@@ -712,6 +712,7 @@ stateblock	InkState		=	stateblock_state
 
 stateblock	TransState		=	stateblock_state
 {
+/*
 	VertexShader			=	compile	vs_3_0	cMainVS();
 	PixelShader				=	compile	ps_3_0	cTrnsPS();
 
@@ -726,6 +727,24 @@ stateblock	TransState		=	stateblock_state
 	StencilMask				=	255;
 	StencilPass				=	incrsat;
 	StencilZFail			=	replace;
+*/
+	VertexShader			=	compile	vs_3_0	cMainVS();
+	PixelShader			=	compile	ps_3_0	cTrnsPS();
+
+		ZEnable			= true;
+		ZWriteEnable		= false;
+		CullMode		= none;
+		AlphaBlendEnable	= true;
+		AlphaTestEnable		= true;
+
+		StencilFunc		= equal;
+		StencilRef		= 0;
+		StencilMask		= 255;
+		StencilPass		= incrsat;
+		StencilFail		= keep;
+		StencilZFail		= replace;
+		StencilEnable		= true;
+
 };
 
 stateblock	NATState		=	stateblock_state
