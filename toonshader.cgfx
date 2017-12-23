@@ -4,7 +4,6 @@
 								(c) 2008 TechArts Inc.
 	( This file is a part of "3D Custom Girl" project. )
 **********************************************************/
-
 //----------------------------------
 //	tweakables
 //----------------------------------
@@ -120,15 +119,16 @@ float4 ManColor
 //----------------------------------
 //	un-tweakables
 //----------------------------------
+
 uniform	float4x4	wld			:	World;// ワールド変換行列
 uniform	float4x4	wv			:	WorldView;
 uniform	float4x4	wvp			:	WorldViewProjection;
 uniform	float4x4	view		:	View;// カメラビュー変換行列
 uniform	float4x4	proj		:	Projection;// 射影変換行列
 uniform	float4x4	lv			:	LightView;// ライトビュー変換行列
-uniform	float4x4	lvp			:	LightViewProjection;// ライトビュー射影変換行列
 uniform	float4x4	lp			:	LightProjection;// ライトビュー射影変換行列
 uniform	float4x4	wlp			:	WorldLightViewProjection;
+uniform	float4x4	lvp			:	LightViewProjection;// ライトビュー変換行列
 
 //------------------------------------------------------------------
 //	konoaさん追加HLSL3.0用テクスチャフィルタ	ここから
@@ -312,8 +312,7 @@ cVertexData2	cInkVS( appdata IN )
 
 	float4	p;
 
-	p				=	mul( pos, wvp );
-	p				=	mul( p, bias );
+	p				=	mul( mul( pos, wvp ), bias);
 	OUT.Position	=	p;
 
 	return	OUT;
@@ -342,7 +341,7 @@ cVertexData	cMainVS( appdata IN )	//デフォルト頂点シェーダ
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV;
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -360,9 +359,9 @@ cVertexData	cMainVS2( appdata IN )
 
 	float4	p;
 
-	p				=	mul( pos, wvp );
+	p				=	mul( mul( pos, wvp ), bias);
 	p.z				=	1.0 * p.w;
-	OUT.Position	=	mul( p, bias );
+	OUT.Position	=	p;
 	OUT.UV			=	IN.UV;
 	OUT.Normal		=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -379,9 +378,9 @@ cVertexData	cMainVS3( appdata IN )
 
 	float4	p;
 
-	p				=	mul( pos, wvp );
+	p				=	mul( mul( pos, wvp ), bias);
 	p.z				=	p.z + ZMat2ZOffset;
-	OUT.Position	=	mul( p, bias );
+	OUT.Position	=	p;
 	OUT.UV			=	IN.UV;
 	OUT.Normal		=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -397,7 +396,7 @@ cVertexData	cMainVS_UVSCR( appdata IN )
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + float2( UVSCR.xy );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -418,6 +417,7 @@ float4	cMainPS( cVertexData IN ) : COLOR	//デフォルトピクセルシェー�
 	
 	float	ldotn		=	dot (nnormal, -LightDirForced);
 	float	hdotn		=	dot (esnormal, -halfvec);
+
 	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.6) + (Ambient * 0.01)));
 	float	hp0			=	min (1.0, max( 0.0, (hdotn * 0.708) + (HighLight * 0.01)));
 	float	hp			=	pow (hp0, HighLightPower);
@@ -636,7 +636,7 @@ cNormalMapData	NormalMap_VS( NormalMapData IN, float4 inpos : POSITION, float3 i
 
 	calc_skindeform( float4( inpos.xyz, 1.0 ), inNormal, IN.VWeights, IN.BoneIdxs, inpos, inNormal );
 
-	OUT.Position			=	mul( inpos, wvp );
+	OUT.Position			=	mul( mul( inpos, wvp ), bias );
 	float4x4 invTangentMat	=	InvTangentMatrix( normalize(inTangent), normalize(inBinormal), normalize(inNormal) );
 	OUT.LightTangentDirect	=	mul( float4( -LightDirForced.xyz, 1.0f ), invTangentMat );
 	OUT.UV					=	inUV;
@@ -675,6 +675,12 @@ float4	NormalMap_PS( cNormalMapData IN, float4 inUV : TEXCOORD0, float3 inLightT
 	if( ZValue < SM_Z ){bright	=	-1 * max( 0.0f, bright ) + 1;}
 	
 	return	ColRate( float4(bright * col.rgb, texcol.a) * ColorRate );
+}
+
+
+float4 cBonePS( cVertexData2 IN ) : COLOR
+{
+	return	ColRate( ManColor );
 }
 
 //-----------------------------------------------------------------
@@ -732,8 +738,6 @@ stateblock	NATState		=	stateblock_state
 	AlphaTestEnable			=	true;
 
 	CullMode				=	CW;
-
-	ZWriteEnable			=	false;
 };
 
 stateblock	KAZANState		=	stateblock_state
@@ -880,6 +884,7 @@ technique HOHO
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cHohoPS();
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -889,6 +894,7 @@ technique ZAMEN0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cZamn0PS();
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -898,6 +904,7 @@ technique ZAMEN1
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cZamn1PS();
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -907,6 +914,7 @@ technique ZAMEN2
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cZamn2PS();
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -961,7 +969,7 @@ technique NZAT_ShadowOff_InkOff
 {
 	pass Main
 	{
-		StateBlock			=	(DefaultState);
+		StateBlock			=	(NATState);
 		ZWriteEnable		=	false;
 	}
 }
@@ -974,6 +982,7 @@ technique ZMAT
 		VertexShader		=	compile	vs_3_0	cMainVS2();
 		PixelShader			=	compile	ps_3_0	cMainPS2();
 		ZFunc				=	always;
+		ZWriteEnable		=	true;
 	}
 }
 
@@ -985,6 +994,7 @@ technique ZMAT2
 		VertexShader		=	compile	vs_3_0	cMainVS3();
 		PixelShader			=	compile	ps_3_0	cMainPS2();
 		ZFunc				=	always;
+		ZWriteEnable		=	true;
 	}
 }
 
@@ -995,6 +1005,7 @@ technique NCZAT_ShadowOff_InkOff
 	{
 		StateBlock			=	(NATState);
 		CullMode			=	None;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -1012,6 +1023,7 @@ technique AURORA
 	{
 		StateBlock			=	(NATState);
 		VertexShader		=	compile	vs_3_0	cMainVS_UVSCR();
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -1030,12 +1042,14 @@ technique POSEEDIT_UI
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
 		ZWriteEnable		=	false;
 	}
 
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
+		ZEnable				=	false;
 		ZWriteEnable		=	false;
 	}
 }
@@ -1178,7 +1192,7 @@ cVertexData cMainVS_UVRPL( appdata IN ) //追加 Ripple
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	float UVRPL			=	tan(UVSCR.x * 500)*1;
 	//float UVRPL		=	(1+(tan(UVSCR.x*100))/(UVSCR.x*100));
 	//float UVRPL		=	(UVSCR.x*UVSCR.x*1000);
@@ -1249,7 +1263,7 @@ cVertexData cMainVS_UVSCR2( appdata IN )	//追加	XScroll
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position	=	mul( mul( pos, wvp ), bias );
+	OUT.Position	=	mul( mul( pos, wvp ), bias);
 	OUT.UV			=	IN.UV + ( ( ( UVSCR.xy * UVScroll ) ) + ( ( UVSCR.yx * 0 ) ) );
 	OUT.Normal		=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1330,7 +1344,7 @@ cVertexData cMainVS_UVSCR3( appdata IN )	//追加	XRepeat
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( ( sin( UVSCR.xy * UVScrollX ) * UVScrollAmpX ) + ( ( UVSCR.yx * 0 ) ) );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1345,7 +1359,7 @@ cVertexData cMainVS_UVSCR4( appdata IN )	//追加	Bound
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( ( ( UVSCR.xy * 0.3185 ) * UVScrollX ) + ( abs( cos( UVSCR.yx * UVScrollY ) ) * UVScrollAmpY ) );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1360,7 +1374,7 @@ cVertexData cMainVS_UVSCR5( appdata IN )	//追加	Circle
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( ( sin( UVSCR.xy * UVScrollX ) * UVScrollAmpX ) + ( cos( UVSCR.yx * UVScrollY ) * UVScrollAmpY ) );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1375,7 +1389,7 @@ cVertexData cMainVS_UVSCR6( appdata IN )	//追加	Blanco
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( sin( cos( UVSCR.xy * UVScrollX ) * UVScrollAmpX ) + cos( sin( UVSCR.yx * UVScrollY ) * UVScrollAmpY ) );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1390,7 +1404,7 @@ cVertexData cMainVS_UVSCR7( appdata IN )	//追加	Eight
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( ( cos( UVSCR.xy * UVScrollX ) * UVScrollAmpX / 2 ) + ( sin( UVSCR.yx * UVScrollY * 2 ) * UVScrollAmpY / 2 ) );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1405,7 +1419,7 @@ cVertexData cMainVS_UVSCR8( appdata IN ) 	//追加	Wave
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( ( ( UVSCR.xy * 0.3185 * UVScrollX ) ) + ( sin( UVSCR.yx * UVScrollY * 2 ) * UVScrollAmpY / 2 ) );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1420,7 +1434,7 @@ cVertexData cMainVS_UVSCR9( appdata IN )	//追加	XYScroll
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( ( ( UVSCR.xy * UVScrollX ) ) + ( ( UVSCR.yx * UVScrollY ) ) );
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -1617,6 +1631,7 @@ float4 cMainPS3( cVertexData IN ) : COLOR//ShadeTex適用範囲変更ピクセ�
 	
 	float	ldotn		=	dot (nnormal, -LightDirForced);
 	float	hdotn		=	dot (esnormal, -halfvec);
+
 	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.5) + (Ambient * 0.01)));
 	float	hp0			=	min (1.0, max( 0.0, (hdotn * 0.708) + (HighLight * 0.01)));
 	float	hp			=	pow (hp0, HighLightPower);
@@ -1745,7 +1760,7 @@ cHLMapData	cHLMapVSB( HLMapData IN )	//反射光ハイライト後頂点シェ�
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.ZUV				=	mul( pos, lvp );
 
 	float3 N			=	normalize( mul(float4(nor.x,-nor.y,nor.z,0), wld) );
@@ -1764,7 +1779,7 @@ cHLMapData	cHLMapVSF( HLMapData IN )	//反射光ハイライト前頂点シェ�
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.ZUV				=	mul( pos, lvp );
 
 	float3	N			=	normalize( mul(float4(nor.x,-nor.y,nor.z,0), wld) );
@@ -2012,8 +2027,7 @@ cVertexData	cMainVS_UVROT( appdata IN )	//追加Rotate
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
-
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	float	UVROT		=	(UVRotate*(UVSCR.x));
 	float	UVSCL		=	abs(1/cos(UVScale*UVSCR.x));
 	float2	UVTEX		=	float2(IN.UV.x,IN.UV.y);
@@ -2138,8 +2152,7 @@ cVertexData	cMainVS_UVCLC( appdata IN )	//追加Clock
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
-
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	float	SCRCOUNT		=	333.34*(UVSCR.x);
 	float	UVROT			=	-floor(SCRCOUNT/UVClock)*3.1415/30;
 	float2	UVTEX		=	float2(IN.UV.x,IN.UV.y);
@@ -2239,7 +2252,7 @@ cFurShaderData	cFurSkinVS(appdata IN)
 	pos					=	float4( pos.xyz, 1 );
 
 	OUT.random			=	0;
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV;
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -2320,7 +2333,6 @@ technique ShadingFurSkin
 		StateBlock			=	(NATState);
 		VertexShader		=	compile	vs_3_0	cFurSkinVS();
 		PixelShader			=	compile	ps_3_0	cShadingFurSkinPS();
-		ZWriteEnable		=	true;
 		}
 }
 
@@ -2332,6 +2344,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.0);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.0);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur1
 		{
@@ -2339,6 +2352,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.125);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.125);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur2
 		{
@@ -2346,6 +2360,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.25);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.25);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur3
 		{
@@ -2353,6 +2368,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.375);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.375);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur4
 		{
@@ -2360,6 +2376,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.5);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.5);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur5
 		{
@@ -2367,6 +2384,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.625);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.625);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur6
 		{
@@ -2374,6 +2392,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.75);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.75);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur7
 		{
@@ -2381,6 +2400,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (0.875);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (0.875);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 		pass SFur8
 		{
@@ -2388,6 +2408,7 @@ technique ShadingFur
 		VertexShader		=	compile	vs_3_0	cFurVS (1.0);
 		PixelShader			=	compile	ps_3_0	cShadingFurPS (1.0);
 		CullMode			=	none;
+		ZWriteEnable		=	false;
 		}
 }
 
@@ -2763,6 +2784,7 @@ float4 cMainPS4( cVertexData IN ) : COLOR//ShadeTex適用範囲変更ピクセ�
 	
 	float	ldotn		=	dot (nnormal, -LightDirForced);
 	float	hdotn		=	dot (esnormal, -halfvec);
+
 	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.5) + (Ambient * 0.01)));
 	float	hp0			=	min (1.0, max( 0.0, (hdotn * 0.708) + (HighLight * 0.01)));
 	float	hp			=	pow (hp0, HighLightPower);
@@ -2870,11 +2892,13 @@ technique ShadowOff_Front
 	{
 		StateBlock			=	(InkState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2885,11 +2909,13 @@ technique ShadowOn_Front
 	{
 		StateBlock			=	(InkState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2899,6 +2925,7 @@ technique ShadowOff_InkOff_Front
 	{
 		StateBlock			=	(DefaultState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2908,6 +2935,7 @@ technique ShadowOn_InkOff_Front
 	{
 		StateBlock			=	(DefaultState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2917,12 +2945,14 @@ technique AllAmb_ShadowOff_Front
 	{
 		StateBlock			=	(InkState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2930,14 +2960,16 @@ technique AllAmb_ShadowOn_Front
 {
 	pass Ink
 	{
-		ZEnable				=	false;
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2948,6 +2980,7 @@ technique AllAmb_ShadowOff_InkOff_Front
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2958,6 +2991,7 @@ technique AllAmb_ShadowOn_InkOff_Front
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2967,18 +3001,21 @@ technique AllAmb_ShadowOff_BHL_Front
 	{
 		StateBlock			=	(InkState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -2989,12 +3026,14 @@ technique AllAmb_ShadowOff_InkOff_BHL_Front
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3004,12 +3043,14 @@ technique AllAmb_ShadowOff_HLC_Front
 	{
 		StateBlock			=	(InkState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3019,12 +3060,14 @@ technique AllAmb_ShadowOn_HLC_Front
 	{
 		StateBlock			=	(InkState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3035,6 +3078,7 @@ technique AllAmb_ShadowOff_InkOff_HLC_Front
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3045,6 +3089,7 @@ technique AllAmb_ShadowOn_InkOff_HLC_Front
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3054,18 +3099,21 @@ technique AllAmb_ShadowOff_BHL_HLC_Front
 	{
 		StateBlock			=	(InkState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3076,12 +3124,14 @@ technique AllAmb_ShadowOff_InkOff_BHL_HLC_Front
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3430,11 +3480,14 @@ technique NAT_ShadowOff_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3444,11 +3497,14 @@ technique NAT_ShadowOn_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3458,6 +3514,7 @@ technique NAT_ShadowOff_InkOff_Front
 	{
 		StateBlock			=	(NATState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3467,6 +3524,7 @@ technique NAT_ShadowOn_InkOff_Front
 	{
 		StateBlock			=	(NATState);
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3475,12 +3533,15 @@ technique NAT_AllAmb_ShadowOff_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3489,12 +3550,15 @@ technique NAT_AllAmb_ShadowOn_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3505,6 +3569,7 @@ technique NAT_AllAmb_ShadowOff_InkOff_Front
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3515,6 +3580,7 @@ technique NAT_AllAmb_ShadowOn_InkOff_Front
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3523,18 +3589,22 @@ technique NAT_AllAmb_ShadowOff_BHL_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3545,12 +3615,14 @@ technique NAT_AllAmb_ShadowOff_InkOff_BHL_Front
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3559,12 +3631,15 @@ technique NAT_AllAmb_ShadowOff_HLC_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		PixelShader		=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3573,12 +3648,15 @@ technique NAT_AllAmb_ShadowOn_HLC_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3589,6 +3667,7 @@ technique NAT_AllAmb_ShadowOff_InkOff_HLC_Front
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3599,6 +3678,7 @@ technique NAT_AllAmb_ShadowOn_InkOff_HLC_Front
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3607,18 +3687,22 @@ technique NAT_AllAmb_ShadowOff_BHL_HLC_Front
 	pass Ink
 	{
 		StateBlock			=	(InkState);
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Main
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -3629,12 +3713,14 @@ technique NAT_AllAmb_ShadowOff_InkOff_BHL_HLC_Front
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS4();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -4246,6 +4332,8 @@ technique AllAmb_ShadowOff_InkOff_Front_Emissive
 	{
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3_emissive();
+		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -4256,12 +4344,14 @@ technique AllAmb_ShadowOff_InkOff_BHL_Front_Emissive
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3_emissive();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS_emissive();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -4295,6 +4385,7 @@ technique NAT_AllAmb_ShadowOff_InkOff_Front_Emissive
 		StateBlock			=	(DefaultState);
 		PixelShader			=	compile	ps_3_0	cMainPS3_emissive();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -4305,12 +4396,14 @@ technique NAT_AllAmb_ShadowOff_InkOff_BHL_Front_Emissive
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cMainPS3_emissive();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 	pass Pass0
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS_emissive();
 		ZEnable				=	false;
+		ZWriteEnable		=	false;
 	}
 }
 
@@ -4844,6 +4937,7 @@ float4	cMainPS5( cVertexData IN ) : COLOR//デフォルトピクセルシェー�
 	
 	float	ldotn		=	dot (nnormal, -LightDirForced);
 	float	hdotn		=	dot (esnormal, -halfvec);
+
 	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.6) + (Ambient * 0.01)));
 	float	hp0			=	min (1.0, max( 0.0, (hdotn * 0.708) + (HighLight * 0.01)));
 	float	hp			=	pow (hp0, HighLightPower);
@@ -4873,6 +4967,7 @@ float4	cMainPS6( cVertexData IN ) : COLOR//ShadeTex適用範囲変更ピクセ�
 	
 	float	ldotn		=	dot (nnormal, -LightDirForced);
 	float	hdotn		=	dot (esnormal, -halfvec);
+
 	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.5) + (Ambient * 0.01)));
 	float	hp0			=	min (1.0, max( 0.0, (hdotn * 0.708) + (HighLight * 0.01)));
 	float	hp			=	pow (hp0, HighLightPower);
@@ -5723,7 +5818,7 @@ cVertexData	cMainVS_ParaHUD( appdata IN )
 
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( pos, mul( wld, proj ) );
+	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
 	OUT.UV				=	IN.UV;
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
 
@@ -6765,7 +6860,7 @@ cVertexDataUVa	cMainVS_UVSCR9_UVa( appdata IN ) //追加 XYScroll
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
-	OUT.Position		=	mul( mul( pos, wvp ), bias );
+	OUT.Position		=	mul( mul( pos, wvp ), bias);
 	OUT.UV				=	IN.UV + ( ( ( ( UVSCR.xy * UVScrollX ) ) + ( ( UVSCR.yx * UVScrollY ) ) )*RGBScroll);
 	OUT.UVa				=	IN.UV + ( ( ( ( UVSCR.xy * UVScrollX ) ) + ( ( UVSCR.yx * UVScrollY ) ) )*AScroll);
 	OUT.Normal			=	normalize( mul( float4( nor.xyz, 0 ), wld ) );
