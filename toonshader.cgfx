@@ -217,12 +217,10 @@ struct cVertexData2
 //	★20100612	パース用行列	ここから
 //------------------------------------------------------------------
 
-static const float4x4	bias	=	float4x4(
-	1.0f,	0.0f,	0.0f,	0.0f,
-	0.0f,	1.0f,	0.0f,	0.0f,
-	0.0f,	0.0f,	1.0f,	0.0f,
-	0.0f,	0.0f,	0.0f,	1.002f
-);
+float4 bias1 <	>	=	{ 1.0f,	0.0f,	0.0f,	0.0f };
+float4 bias2 <	>	=	{ 0.0f,	1.0f,	0.0f,	0.0f };
+float4 bias3 <	>	=	{ 0.0f,	0.0f,	1.0f,	0.0f };
+float4 bias4 <	>	=	{ 0.0f,	0.0f,	0.0f,	1.002f };
 
 //------------------------------------------------------------------
 //	★20100612	パース用行列	ここまで
@@ -306,9 +304,32 @@ cVertexData2	cInkVS( appdata IN )
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	pos				=	float4( pos.xyz + ( normalize( nor ) * Thickness ), 1);
+
+	float4	p;
+
+	p				=	mul( mul( pos, wvp ), bias);
+	OUT.Position	=	p;
+
+	return	OUT;
+}
+
+cVertexData2	cBackInkVS( appdata IN )
+{
+	cVertexData2	OUT;
+
+	float4	pos;
+	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
+	calc_skindeform( float4( IN.Position.xyz, 1 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
+
+	pos				=	float4( pos.xyz + ( normalize( nor ) *-Thickness ), 1);
 
 	float4	p;
 
@@ -339,6 +360,8 @@ cVertexData	cMainVS( appdata IN )	//デフォルト頂点シェーダ
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -354,6 +377,8 @@ cVertexData	cMainVS2( appdata IN )
 
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -371,8 +396,11 @@ cVertexData	cMainVS2( appdata IN )
 cVertexData	cMainVS3( appdata IN )
 {
 	cVertexData		OUT;
+
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -393,6 +421,8 @@ cVertexData	cMainVS_UVSCR( appdata IN )
 
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -634,6 +664,8 @@ cNormalMapData	NormalMap_VS( NormalMapData IN, float4 inpos : POSITION, float3 i
 {
 	cNormalMapData	OUT		=	(cNormalMapData)0;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( inpos.xyz, 1.0 ), inNormal, IN.VWeights, IN.BoneIdxs, inpos, inNormal );
 
 	OUT.Position			=	mul( mul( inpos, wvp ), bias );
@@ -698,6 +730,18 @@ stateblock	DefaultState	=	stateblock_state
 	CullMode				=	CW;
 };
 
+stateblock	CounterState	=	stateblock_state
+{
+	VertexShader			=	compile	vs_3_0	cMainVS();
+	PixelShader				=	compile	ps_3_0	cMainPS();
+
+	AlphaFunc				=	greaterequal;
+
+	AlphaTestEnable			=	true;
+
+	CullMode				=	CCW;
+};
+
 stateblock	InkState		=	stateblock_state
 {
 	VertexShader			=	compile	vs_3_0	cInkVS();
@@ -710,41 +754,36 @@ stateblock	InkState		=	stateblock_state
 	CullMode				=	CCW;
 };
 
-stateblock	TransState		=	stateblock_state
+stateblock	BackInkState		=	stateblock_state
 {
-/*
-	VertexShader			=	compile	vs_3_0	cMainVS();
-	PixelShader				=	compile	ps_3_0	cTrnsPS();
+	VertexShader			=	compile	vs_3_0	cBackInkVS();
+	PixelShader				=	compile	ps_3_0	cInkPS();
 
-	AlphaFunc				=	always;
+	AlphaFunc				=	greaterequal;
 
 	AlphaTestEnable			=	true;
 
-	CullMode				=	None;
+	CullMode				=	CW;
+};
 
-	StencilEnable			=	true;
-	StencilFunc				=	equal;
-	StencilMask				=	255;
-	StencilPass				=	incrsat;
-	StencilZFail			=	replace;
-*/
+stateblock	TransState		=	stateblock_state
+{
 	VertexShader			=	compile	vs_3_0	cMainVS();
-	PixelShader			=	compile	ps_3_0	cTrnsPS();
+	PixelShader				=	compile	ps_3_0	cTrnsPS();
 
-		ZEnable			= true;
-		ZWriteEnable		= false;
-		CullMode		= none;
-		AlphaBlendEnable	= true;
-		AlphaTestEnable		= true;
+	ZEnable			= true;
+	ZWriteEnable		= false;
+	CullMode		= none;
+	AlphaBlendEnable	= true;
+	AlphaTestEnable		= true;
 
-		StencilFunc		= equal;
-		StencilRef		= 0;
-		StencilMask		= 255;
-		StencilPass		= incrsat;
-		StencilFail		= keep;
-		StencilZFail		= replace;
-		StencilEnable		= true;
-
+	StencilFunc		= equal;
+	StencilRef		= 0;
+	StencilMask		= 255;
+	StencilPass		= incrsat;
+	StencilFail		= keep;
+	StencilZFail		= replace;
+	StencilEnable		= true;
 };
 
 stateblock	NATState		=	stateblock_state
@@ -815,6 +854,26 @@ technique ShadowOn
 	}
 }
 
+technique BothSide
+{
+	pass BackInk
+	{
+		StateBlock			=	(BackInkState);
+	}
+	pass Ink
+	{
+		StateBlock			=	(InkState);
+	}
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+	}
+}
+
 technique ShadowOff_InkOff
 {
 	pass Main
@@ -825,6 +884,18 @@ technique ShadowOff_InkOff
 
 technique ShadowOn_InkOff
 {
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+	}
+}
+
+technique BothSide_InkOff
+{
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+	}
 	pass Main
 	{
 		StateBlock			=	(DefaultState);
@@ -1209,6 +1280,8 @@ cVertexData cMainVS_UVRPL( appdata IN ) //追加 Ripple
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -1279,6 +1352,8 @@ cVertexData cMainVS_UVSCR2( appdata IN )	//追加	XScroll
 	cVertexData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -1361,6 +1436,8 @@ cVertexData cMainVS_UVSCR3( appdata IN )	//追加	XRepeat
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -1375,6 +1452,8 @@ cVertexData cMainVS_UVSCR4( appdata IN )	//追加	Bound
 	cVertexData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -1391,6 +1470,8 @@ cVertexData cMainVS_UVSCR5( appdata IN )	//追加	Circle
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -1405,6 +1486,8 @@ cVertexData cMainVS_UVSCR6( appdata IN )	//追加	Blanco
 	cVertexData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -1421,6 +1504,8 @@ cVertexData cMainVS_UVSCR7( appdata IN )	//追加	Eight
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -1436,6 +1521,8 @@ cVertexData cMainVS_UVSCR8( appdata IN ) 	//追加	Wave
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -1450,6 +1537,8 @@ cVertexData cMainVS_UVSCR9( appdata IN )	//追加	XYScroll
 	cVertexData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -1714,6 +1803,42 @@ technique AllAmb_ShadowOn_InkOff
 	}
 }
 
+technique AllAmb_BothSide
+{
+	pass BackInk
+	{
+		StateBlock			=	(BackInkState);
+	}
+	pass Ink
+	{
+		StateBlock			=	(InkState);
+	}
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+}
+
+technique AllAmb_BothSide_InkOff
+{
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+}
+
 //------------------------------------------------------------------
 //	20090220	kemoさん追加technique "texture ShadeTex" 適用範囲を変更	ここまで
 //------------------------------------------------------------------
@@ -1777,6 +1902,8 @@ cHLMapData	cHLMapVSB( HLMapData IN )	//反射光ハイライト後頂点シェ�
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -1795,6 +1922,8 @@ cHLMapData	cHLMapVSF( HLMapData IN )	//反射光ハイライト前頂点シェ�
 	cHLMapData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -1875,6 +2004,42 @@ technique AllAmb_ShadowOn_BL
 	}
 }
 
+technique AllAmb_BothSide_BL
+{
+	pass BackInk
+	{
+		StateBlock			=	(BackInkState);
+	}
+	pass Ink
+	{
+		StateBlock			=	(InkState);
+	}
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Pass0
+	{
+		StateBlock			=	(KAZANState);
+		CullMode			=	None;
+		VertexShader		=	compile	vs_3_0	cHLMapVSB();
+		PixelShader			=	compile	ps_3_0	cHLMapPS();
+	}
+	pass Pass1
+	{
+		StateBlock			=	(KAZANState);
+		CullMode			=	None;
+		VertexShader		=	compile	vs_3_0	cHLMapVSF();
+		PixelShader			=	compile	ps_3_0	cHLMapPS();
+	}
+}
+
 technique AllAmb_ShadowOff_InkOff_BL
 {
 	pass Main
@@ -1913,6 +2078,35 @@ technique AllAmb_ShadowOn_InkOff_BL
 	pass Pass1
 	{
 		StateBlock			=	(KAZANState);
+		VertexShader		=	compile	vs_3_0	cHLMapVSF();
+		PixelShader			=	compile	ps_3_0	cHLMapPS();
+	}
+}
+
+technique AllAmb_BothSide_InkOff_BL
+{
+
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Pass0
+	{
+		StateBlock			=	(KAZANState);
+		CullMode			=	None;
+		VertexShader		=	compile	vs_3_0	cHLMapVSB();
+		PixelShader			=	compile	ps_3_0	cHLMapPS();
+	}
+	pass Pass1
+	{
+		StateBlock			=	(KAZANState);
+		CullMode			=	None;
 		VertexShader		=	compile	vs_3_0	cHLMapVSF();
 		PixelShader			=	compile	ps_3_0	cHLMapPS();
 	}
@@ -2044,6 +2238,8 @@ cVertexData	cMainVS_UVROT( appdata IN )	//追加Rotate
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -2169,6 +2365,8 @@ cVertexData	cMainVS_UVCLC( appdata IN )	//追加Clock
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -2266,6 +2464,8 @@ cFurShaderData	cFurSkinVS(appdata IN)
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	pos					=	float4( pos.xyz, 1 );
@@ -2306,6 +2506,8 @@ cFurShaderData	cFurVS(appdata IN,uniform float ratio)
 	cFurShaderData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform( float4(IN.Position.xyz, 1), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -2451,27 +2653,31 @@ float4 cBHLMainPS( cVertexData IN ) : COLOR //逆光ハイライトピクセル�
 	float4	viewNor		=	mul( IN.Normal, wv );
 	float	L2			=	dot( viewNor, float4(0,0,1,0) );
 	float	lp2			=	min( 1.0, max( 0.0, ( L2 * 0.5   ) + ( Ambient   * 0.01 ) ) );
-	float	hp02		=	min( 1.0, max( 0.0, ( L2 * 0.708 ) + ( HighLight * 0.01 ) ) );
-	float	hp2			=	pow( hp02, HighLightPower );
 
 	float4	nnormal		=	float4 (normalize (IN.Normal), 0.0);
-	float4	esnormal	=	mul (nnormal, view);
-	float4	eslight		=	mul (LightDirForced, view);
-	float4	eyedir		=	{0, 0, -1, 0};
-	float4	halfvec		=	normalize (eyedir + eslight);
 
 	float	ldotn		=	dot (nnormal, -LightDirForced);
-	float	hdotn		=	dot (esnormal, -halfvec);
 	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.5) + (Ambient * 0.01)));
-	float	hp0			=	min (1.0, max( 0.0, (hdotn * 0.708) + (HighLight * 0.01)));
-	float	hp			=	pow (hp0, HighLightPower);
 
 	float4	BHLcol		=	tex2D( ShadeTex, float2( lp2, 0.9 ) );
 	float4	shadecol	=	tex2D( ShadeTex, float2( lp, 0.9 ) );
-	float4	hl2			=	float4( hp2, hp2, hp2, 1.0 );
 
-	float4	col2;
-	col2				=	BHLcol;
+	return	ColRate( float4(shadecol.rgb, BHLcol.a) * ColorRate );
+}
+
+float4 cBHLCounterPS( cVertexData IN ) : COLOR //逆光ハイライト裏面ピクセルシェーダ
+{
+	float4	viewNor		=	mul( -IN.Normal, wv );
+	float	L2			=	dot( viewNor, float4(0,0,1,0) );
+	float	lp2			=	min( 1.0, max( 0.0, ( L2 * 0.5   ) + ( Ambient   * 0.01 ) ) );
+
+	float4	nnormal		=	float4 (normalize (-IN.Normal), 0.0);
+
+	float	ldotn		=	dot (nnormal, -LightDirForced);
+	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.5) + (Ambient * 0.01)));
+
+	float4	BHLcol		=	tex2D( ShadeTex, float2( lp2, 0.9 ) );
+	float4	shadecol	=	tex2D( ShadeTex, float2( lp, 0.9 ) );
 
 	return	ColRate( float4(shadecol.rgb, BHLcol.a) * ColorRate );
 }
@@ -2494,6 +2700,39 @@ technique AllAmb_ShadowOff_BHL
 	}
 }
 
+technique AllAmb_BothSide_BHL
+{
+	pass BackInk
+	{
+		StateBlock			=	(BackInkState);
+	}
+	pass Ink
+	{
+		StateBlock			=	(InkState);
+	}
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Pass0
+	{
+		StateBlock			=	(NATState);
+		CullMode			=	CCW;
+		PixelShader			=	compile	ps_3_0	cBHLCounterPS();
+	}
+	pass Pass1
+	{
+		StateBlock			=	(NATState);
+		PixelShader			=	compile	ps_3_0	cBHLMainPS();
+	}
+}
+
 technique AllAmb_ShadowOff_InkOff_BHL
 {
 	pass Main
@@ -2502,6 +2741,31 @@ technique AllAmb_ShadowOff_InkOff_BHL
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 	}
 	pass Pass0
+	{
+		StateBlock			=	(NATState);
+		PixelShader			=	compile	ps_3_0	cBHLMainPS();
+	}
+}
+
+technique AllAmb_BothSide_InkOff_BHL
+{
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Pass0
+	{
+		StateBlock			=	(NATState);
+		CullMode			=	CCW;
+		PixelShader			=	compile	ps_3_0	cBHLCounterPS();
+	}
+	pass Pass1
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
@@ -4426,6 +4690,16 @@ technique NAT_AllAmb_ShadowOff_InkOff_BHL_Front_Emissive
 	}
 }
 
+technique NZAT_ShadowOff_InkOff_Emissive
+{
+	pass Main
+	{
+		StateBlock			=	(NATState);
+		PixelShader			=	compile	ps_3_0	cMainPS_emissive();
+		ZWriteEnable		=	false;
+	}
+}
+
 technique KAZAN_Emissive
 {
 	pass Main
@@ -5835,6 +6109,8 @@ cVertexData	cMainVS_ParaHUD( appdata IN )
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
@@ -5849,6 +6125,8 @@ cVertexData	cMainVS_UVSCR_ParaHUD( appdata IN )
 	cVertexData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -5865,6 +6143,8 @@ cVertexData	cMainVS_UVSCR2_ParaHUD( appdata IN ) //追加 XScroll
 	float4	pos;
 	float3 nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
@@ -5880,6 +6160,8 @@ cVertexData	cMainVS_UVSCR3_ParaHUD( appdata IN ) //追加 XRepeat
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
@@ -5894,6 +6176,8 @@ cVertexData	cMainVS_UVSCR4_ParaHUD( appdata IN ) //追加 Bound
 	cVertexData	OUT;
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -5911,6 +6195,8 @@ cVertexData	cMainVS_UVSCR5_ParaHUD( appdata IN ) //追加 Circle
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
@@ -5926,6 +6212,8 @@ cVertexData	cMainVS_UVSCR6_ParaHUD( appdata IN ) //追加 Blanco
 
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -5943,6 +6231,8 @@ cVertexData	cMainVS_UVSCR7_ParaHUD( appdata IN ) //追加 Eight
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
@@ -5958,6 +6248,8 @@ cVertexData	cMainVS_UVSCR8_ParaHUD( appdata IN ) //追加 Wave
 
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -5975,6 +6267,8 @@ cVertexData	cMainVS_UVSCR9_ParaHUD( appdata IN ) //追加 XYScroll
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
@@ -5990,6 +6284,8 @@ cVertexData	cMainVS_UVROT_ParaHUD( appdata IN ) //追加 Rotate
 
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -6011,6 +6307,8 @@ cVertexData	cMainVS_UVCLC_ParaHUD( appdata IN ) //追加 Clock
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, mul( wld, proj ) ), bias );
@@ -6030,6 +6328,8 @@ cVertexData	cMainVS_UVRPL_ParaHUD( appdata IN ) //追加 Ripple UV.x=((SQRT(UVSC
 
 	float4	pos;
 	float3	nor;
+
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
 
 	calc_skindeform_ParaHUD( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
@@ -6877,6 +7177,8 @@ cVertexDataUVa	cMainVS_UVSCR9_UVa( appdata IN ) //追加 XYScroll
 	float4	pos;
 	float3	nor;
 
+	static float4x4 bias = float4x4( bias1, bias2, bias3, bias4 );
+
 	calc_skindeform( float4( IN.Position.xyz, 1.0 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
 
 	OUT.Position		=	mul( mul( pos, wvp ), bias);
@@ -7524,125 +7826,3 @@ technique RotateRepeat_FLASH_KAZAN2_Emissive_ParaHUD
 //------------------------------------------------------------------
 //	20120428	★RotateRepeatここまで
 //------------------------------------------------------------------
-
-// 両面描画関連
-// Append by Konoa
-
-cVertexData2	cBackInkVS( appdata IN )
-{
-	cVertexData2	OUT;
-
-	float4	pos;
-	float3	nor;
-
-	calc_skindeform( float4( IN.Position.xyz, 1 ), IN.Normal, IN.VWeights, IN.BoneIdxs, pos, nor );
-
-	pos				=	float4( pos.xyz + ( normalize( nor ) *-Thickness ), 1);
-
-	float4	p;
-
-	p				=	mul( mul( pos, wvp ) , bias );
-	OUT.Position	=	p;
-
-	return	OUT;
-}
-
-stateblock	CounterState	=	stateblock_state
-{
-	VertexShader			=	compile	vs_3_0	cMainVS();
-	PixelShader				=	compile	ps_3_0	cMainPS();
-
-	AlphaFunc				=	greaterequal;
-
-	AlphaTestEnable			=	true;
-
-	CullMode				=	CCW;
-};
-
-stateblock	BackInkState		=	stateblock_state
-{
-	VertexShader			=	compile	vs_3_0	cBackInkVS();
-	PixelShader				=	compile	ps_3_0	cInkPS();
-
-	AlphaFunc				=	greaterequal;
-
-	AlphaTestEnable			=	true;
-
-	CullMode				=	CW;
-};
-
-technique BothSide
-{
-	pass BackInk
-	{
-		StateBlock			=	(BackInkState);
-	}
-	pass Ink
-	{
-		StateBlock			=	(InkState);
-	}
-	pass Counter
-	{
-		StateBlock			=	(CounterState);
-	}
-	pass Main
-	{
-		StateBlock			=	(DefaultState);
-	}
-}
-
-technique BothSide_InkOff
-{
-	pass Counter
-	{
-		StateBlock			=	(CounterState);
-	}
-	pass Main
-	{
-		StateBlock			=	(DefaultState);
-	}
-}
-
-technique AllAmb_BothSide
-{
-	pass BackInk
-	{
-		StateBlock			=	(BackInkState);
-	}
-	pass Ink
-	{
-		StateBlock			=	(InkState);
-	}
-	pass Counter
-	{
-		StateBlock			=	(CounterState);
-	}
-	pass Main
-	{
-		StateBlock			=	(DefaultState);
-		PixelShader			=	compile	ps_3_0	cMainPS3();
-	}
-}
-
-technique AllAmb_BothSide_InkOff
-{
-	pass Counter
-	{
-		StateBlock			=	(CounterState);
-	}
-	pass Main
-	{
-		StateBlock			=	(DefaultState);
-		PixelShader			=	compile	ps_3_0	cMainPS3();
-	}
-}
-
-technique NZAT_ShadowOff_InkOff_Emissive
-{
-	pass Main
-	{
-		StateBlock			=	(NATState);
-		PixelShader			=	compile	ps_3_0	cMainPS_emissive();
-		ZWriteEnable		=	false;
-	}
-}
