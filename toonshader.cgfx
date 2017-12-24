@@ -2653,27 +2653,31 @@ float4 cBHLMainPS( cVertexData IN ) : COLOR //逆光ハイライトピクセル�
 	float4	viewNor		=	mul( IN.Normal, wv );
 	float	L2			=	dot( viewNor, float4(0,0,1,0) );
 	float	lp2			=	min( 1.0, max( 0.0, ( L2 * 0.5   ) + ( Ambient   * 0.01 ) ) );
-	float	hp02		=	min( 1.0, max( 0.0, ( L2 * 0.708 ) + ( HighLight * 0.01 ) ) );
-	float	hp2			=	pow( hp02, HighLightPower );
 
 	float4	nnormal		=	float4 (normalize (IN.Normal), 0.0);
-	float4	esnormal	=	mul (nnormal, view);
-	float4	eslight		=	mul (LightDirForced, view);
-	float4	eyedir		=	{0, 0, -1, 0};
-	float4	halfvec		=	normalize (eyedir + eslight);
 
 	float	ldotn		=	dot (nnormal, -LightDirForced);
-	float	hdotn		=	dot (esnormal, -halfvec);
 	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.5) + (Ambient * 0.01)));
-	float	hp0			=	min (1.0, max( 0.0, (hdotn * 0.708) + (HighLight * 0.01)));
-	float	hp			=	pow (hp0, HighLightPower);
 
 	float4	BHLcol		=	tex2D( ShadeTex, float2( lp2, 0.9 ) );
 	float4	shadecol	=	tex2D( ShadeTex, float2( lp, 0.9 ) );
-	float4	hl2			=	float4( hp2, hp2, hp2, 1.0 );
 
-	float4	col2;
-	col2				=	BHLcol;
+	return	ColRate( float4(shadecol.rgb, BHLcol.a) * ColorRate );
+}
+
+float4 cBHLCounterPS( cVertexData IN ) : COLOR //逆光ハイライト裏面ピクセルシェーダ
+{
+	float4	viewNor		=	mul( -IN.Normal, wv );
+	float	L2			=	dot( viewNor, float4(0,0,1,0) );
+	float	lp2			=	min( 1.0, max( 0.0, ( L2 * 0.5   ) + ( Ambient   * 0.01 ) ) );
+
+	float4	nnormal		=	float4 (normalize (-IN.Normal), 0.0);
+
+	float	ldotn		=	dot (nnormal, -LightDirForced);
+	float	lp			=	min (1.0, max( 0.0, ( ldotn * 0.5) + (Ambient * 0.01)));
+
+	float4	BHLcol		=	tex2D( ShadeTex, float2( lp2, 0.9 ) );
+	float4	shadecol	=	tex2D( ShadeTex, float2( lp, 0.9 ) );
 
 	return	ColRate( float4(shadecol.rgb, BHLcol.a) * ColorRate );
 }
@@ -2696,6 +2700,39 @@ technique AllAmb_ShadowOff_BHL
 	}
 }
 
+technique AllAmb_BothSide_BHL
+{
+	pass BackInk
+	{
+		StateBlock			=	(BackInkState);
+	}
+	pass Ink
+	{
+		StateBlock			=	(InkState);
+	}
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Pass0
+	{
+		StateBlock			=	(NATState);
+		CullMode			=	CCW;
+		PixelShader			=	compile	ps_3_0	cBHLCounterPS();
+	}
+	pass Pass1
+	{
+		StateBlock			=	(NATState);
+		PixelShader			=	compile	ps_3_0	cBHLMainPS();
+	}
+}
+
 technique AllAmb_ShadowOff_InkOff_BHL
 {
 	pass Main
@@ -2704,6 +2741,31 @@ technique AllAmb_ShadowOff_InkOff_BHL
 		PixelShader			=	compile	ps_3_0	cMainPS3();
 	}
 	pass Pass0
+	{
+		StateBlock			=	(NATState);
+		PixelShader			=	compile	ps_3_0	cBHLMainPS();
+	}
+}
+
+technique AllAmb_BothSide_InkOff_BHL
+{
+	pass Counter
+	{
+		StateBlock			=	(CounterState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Main
+	{
+		StateBlock			=	(DefaultState);
+		PixelShader			=	compile	ps_3_0	cMainPS3();
+	}
+	pass Pass0
+	{
+		StateBlock			=	(NATState);
+		CullMode			=	CCW;
+		PixelShader			=	compile	ps_3_0	cBHLCounterPS();
+	}
+	pass Pass1
 	{
 		StateBlock			=	(NATState);
 		PixelShader			=	compile	ps_3_0	cBHLMainPS();
